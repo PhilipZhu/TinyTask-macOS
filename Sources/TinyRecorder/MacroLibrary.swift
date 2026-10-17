@@ -221,7 +221,7 @@ final class MacroLibrary: ObservableObject {
             // Exists but unreadable (permissions, transient I/O). Don't let a later
             // save() clobber it — the data may be fine, we just can't read it now.
             loadedCleanly = false
-            NSLog("TinyRecorder: library.json exists but could not be read — refusing to overwrite it.")
+            NSLog("TinyTask: library.json exists but could not be read — refusing to overwrite it.")
             return
         }
         guard let decoded = try? JSONDecoder().decode(LibraryData.self, from: data) else {
@@ -232,7 +232,7 @@ final class MacroLibrary: ObservableObject {
                 .appendingPathComponent("library.corrupt-\(stamp).json")
             let backedUp = ((try? FileManager.default.copyItem(at: url, to: backup)) != nil)
             loadedCleanly = backedUp
-            NSLog("TinyRecorder: library.json failed to decode — " +
+            NSLog("TinyTask: library.json failed to decode — " +
                   (backedUp ? "backed up to \(backup.lastPathComponent)."
                             : "BACKUP FAILED; refusing to overwrite the original."))
             return
@@ -257,7 +257,7 @@ final class MacroLibrary: ObservableObject {
 
     func save() {
         guard loadedCleanly else {
-            NSLog("TinyRecorder: skipping save to avoid overwriting an unreadable library.json.")
+            NSLog("TinyTask: skipping save to avoid overwriting an unreadable library.json.")
             return
         }
         let snapshot = LibraryData(macros: macros, currentMacroID: currentMacroID)
@@ -539,7 +539,7 @@ private final class LibraryPersistenceWriter: @unchecked Sendable {
                     ofItemAtPath: job.url.path
                 )
             } catch {
-                NSLog("TinyRecorder: could not save library: \(error.localizedDescription)")
+                NSLog("TinyTask: could not save library: \(error.localizedDescription)")
             }
         }
     }

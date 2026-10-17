@@ -1,12 +1,30 @@
-# TinyRecorder
+# TinyTask
 
 A free **macro recorder for macOS**. Record any sequence of mouse clicks, drags, scrolls and keystrokes, then replay it on demand. Lives in the Dock and the menu bar.
 
-macOS doesn't ship a built-in macro recorder — TinyRecorder is one. No subscription, no account, no telemetry, no nag.
+macOS doesn't ship a built-in macro recorder — TinyTask is one. No subscription, no account, no telemetry, no nag.
 
-[**⬇ Download the latest release**](https://github.com/Aaru1801/TinyTask-macOS/releases/latest)
+## Build and install
 
-Unzip `TinyRecorder-1.9.0.zip`, drag TinyRecorder into `/Applications`, and launch. The app walks you through permissions on first launch.
+Requires Xcode 26 or newer and macOS 14 or newer. Clone this fork, then build and install:
+
+```bash
+git clone https://github.com/PhilipZhu/TinyTask-macOS.git
+cd TinyTask-macOS
+./build.sh
+open /Applications/TinyTask.app
+```
+
+Quit TinyTask before replacing an existing installation. The app walks you through permissions on first launch. This fork is distributed as source; the original project is [Aaru1801/TinyTask-macOS](https://github.com/Aaru1801/TinyTask-macOS).
+
+## Updates in this fork
+
+- Schedule a saved recording after a delay or at a date and time, with a queue for editing, cancellation and missed runs.
+- Compact windows, flat hover feedback and a resizable library sidebar.
+- TinyTask app naming and a pointer-clicking-button icon.
+- Shared permission checks, immediate rechecking after Settings and help for stale app approvals.
+
+The sections below describe features inherited from the original project.
 
 ## What's in 1.9 — "Quick Run & Live Activity"
 
@@ -14,7 +32,7 @@ Unzip `TinyRecorder-1.9.0.zip`, drag TinyRecorder into `/Applications`, and laun
 - 📊 **Finder-style Activity Center** — live recording/countdown state plus playback progress, loop and event counts, percentage, and time remaining in one compact control surface.
 - 🧊 **Compact native workspace** — a tighter utility-sized library, dimensional hover/press motion, active-card playback rails, refined empty states, and full Reduce Motion support.
 - 🟢 **Progress everywhere** — the playing card, menu-bar item, Dock badge, and Activity Center stay synchronized with percentage or continuous-loop status.
-- 🛡️ **Safer playback** — TinyRecorder clears its own windows before synthetic input, cancels exposed panels, releases held keys/buttons on every exit path, and stops playback before reopening interactive UI.
+- 🛡️ **Safer playback** — TinyTask clears its own windows before synthetic input, cancels exposed panels, releases held keys/buttons on every exit path, and stops playback before reopening interactive UI.
 - ⚙️ **Faster, safer internals** — non-blocking playback telemetry, coalesced private library saves, hardened imports, bounded loop counts, and owner-only macro files.
 
 ## What's in 1.7 — "Design system"
@@ -23,7 +41,7 @@ Introduced a cohesive native design system across every surface:
 - 🎨 **Signal palette** — events are colored by kind everywhere (key=blue, click=green, scroll=teal, drag=violet, right-click=amber, move=gray), turning every waveform into something you can read at a glance.
 - 🔤 **Refined typography & numerics** — italic-serif "tiny" wordmark, monospaced timestamps/counters, tracked small-caps section labels.
 - ⌨️ **Chiseled keycaps** (with a glass variant on the HUD) and a **pulsing record dot**.
-- 🟥 **Reel-and-smile brand mark** rendered natively.
+- 🟥 **Reel-and-smile brand mark** rendered natively in the original 1.7 release. This fork now uses a mouse-clicking-a-button icon in `Assets/TinyTaskIcon.png`.
 - 📋 **Library** — brand row + status, full-width record button with the record-hotkey keycap, ⌘F search, restrained accent on cards.
 - 🎬 **Recording HUD** — inky Liquid Glass over the live desktop: gradient mono timer, event-track panel with time ruler, a 4-stat grid (clicks/keys/scroll/drag), and Discard/Stop with keycap chords.
 
@@ -58,14 +76,26 @@ Introduced a cohesive native design system across every surface:
 
 ## First launch
 
-The welcome wizard handles this. If you skipped it, macOS asks for two permissions under **System Settings → Privacy & Security**:
+The welcome wizard requests access under **System Settings → Privacy & Security**:
 
-1. **Accessibility** — to *post* synthetic events during playback.
-2. **Input Monitoring** — to *observe* events during recording.
+- **Accessibility** enables recording and playback. A separate Input Monitoring grant is unnecessary when Accessibility is available.
+- **Input Monitoring** can enable recording alone, without playback.
 
-The popover and main window detect when either is missing and show an "Open Settings" banner.
+TinyTask checks the current process's access again when you return from Settings and before recording or playback. **Settings → Permissions** offers **Recheck Access** and **Already enabled? Help…**, which shows the exact running app path.
+
+### If macOS shows access enabled but TinyTask still reports it missing
+
+1. Quit all TinyTask/TinyRecorder copies with **⌘Q**.
+2. Run `./build.sh`, then open `/Applications/TinyTask.app`. Use that same installed copy consistently.
+3. In **Privacy & Security → Accessibility**, remove a stale TinyTask/TinyRecorder entry with **−**, then add `/Applications/TinyTask.app` with **+** and enable it.
+4. Quit and reopen TinyTask after changing access. Use **Recheck Access**.
+5. For recording without Accessibility, follow the same steps under **Input Monitoring**.
+
+The build refuses to replace a running installation. Launching a second copy now identifies the running copy instead of silently redirecting to an older build. Existing macros, schedules and preferences are preserved. No privacy settings are changed automatically.
 
 ## Usage
+
+The library opens at 640×430 points and can shrink to 560×360. Scheduling opens at 420×480; the menu-bar popover is 360×440. Windows remain resizable where appropriate; compact cards keep playback, scheduling, repeats, editing and the full action menu available.
 
 Click the Dock icon (or menu-bar icon) to open the library:
 
@@ -73,9 +103,22 @@ Click the Dock icon (or menu-bar icon) to open the library:
 2. Run through whatever sequence you want to capture.
 3. Press **F6** again or click **Stop** in the HUD. The macro auto-saves into the library.
 4. Hit any card's **▶ Play** button (or press **F8**) to replay it.
-5. Click **✎ Edit** on a card for the timeline editor — scrub, trim, time-stretch, insert waits, edit individual events.
+5. Click **Schedule** on the saved recording to run it later, or open **Macro → Schedule Run…** (**⇧⌘S**). Choose **After a delay** (hours/minutes/seconds) or **At a date & time**.
+6. Click **✎ Edit** on a card for the timeline editor — scrub, trim, time-stretch, insert waits, edit individual events.
 
 Each card has small chips for hotkey, loop count, favorite ★, and a **⋯** menu for Rename, Tag, Duplicate, Export, Delete. Cmd-click cards to multi-select for bulk operations. Drag a card onto another to reorder.
+
+## Scheduling recordings
+
+Stopping a recording returns you to the library with a **Schedule run…** action. You can also schedule any saved recording from its card, the toolbar, or **⇧⌘S**.
+
+- **After a delay:** set hours, minutes and seconds, or use a quick preset.
+- **At a date & time:** choose a future date and local time for a one-time alarm.
+- **Scheduled runs:** inspect the countdown, edit an upcoming run, cancel it, or reschedule a missed/blocked run. A recording has one schedule; updating replaces it.
+
+Keep TinyTask running and your Mac awake and unlocked. Closing the library window is fine; quitting the app prevents runs. Pending schedules survive relaunch, but overdue runs require explicit rescheduling. Sleeping, locking, missing Accessibility permission, an open dialog, or another recording/playback prevents a run; the reason stays in the schedule window. Runs use the recording’s current events, speed, repeats and chain, so later edits apply. Exporting, importing or duplicating a recording does not copy its schedule.
+
+**F7** (or your configured Stop hotkey) stops playback/recording and cancels all pending schedules. The normal Stop playback button only stops the active playback. Schedules are stored locally in `~/Library/Application Support/TinyRecorder/schedules.json`.
 
 ## Hotkeys
 
@@ -84,6 +127,7 @@ Each card has small chips for hotkey, loop count, favorite ★, and a **⋯** me
 | Record / Stop recording | **F6** | toggle |
 | Stop everything | **F7** | aborts recording or playback |
 | Play current macro | **F8** | uses the macro's own loop count |
+| Schedule Run | **⇧⌘S** | timer or date/time alarm |
 | Quick Run | **⌘K** | fuzzy macro and command palette |
 | Search library | **⌘F** | focuses the library search field |
 | New recording | **⌘R** | from menu / popover |
@@ -125,14 +169,16 @@ Configurable in **Preferences → Hotkeys**. Any saved macro can also have its o
 }
 ```
 
+TinyTask retains the original bundle identifier and data directories so existing settings, macros and schedules carry over.
+
 The library lives at `~/Library/Application Support/TinyRecorder/library.json`.
 
 ## Importing & converting (TinyTask + text)
 
-TinyRecorder reads three macro formats — drag any onto the window, double-click in Finder, use **File → Import**, or the command line:
+TinyTask reads three macro formats — drag any onto the window, double-click in Finder, use **File → Import**, or the command line:
 
 - **`.tinyrec`** — native (full metadata).
-- **`.rec`** — **TinyTask** macros (the Windows recorder). TinyRecorder decodes TinyTask's `EVENTMSG` records and translates Windows virtual-key codes to macOS keycodes automatically. Mouse moves/clicks and standard keystrokes convert reliably; mouse-wheel and non-US layouts are best-effort. The importer reports how many records it parsed vs. skipped.
+- **`.rec`** — **TinyTask** macros (the Windows recorder). TinyTask decodes TinyTask's `EVENTMSG` records and translates Windows virtual-key codes to macOS keycodes automatically. Mouse moves/clicks and standard keystrokes convert reliably; mouse-wheel and non-US layouts are best-effort. The importer reports how many records it parsed vs. skipped.
 - **`.txt` / `.trm`** — a simple, hand-editable plain-text format ("TRM"). Export any macro to it via the card menu → **Export → As Text…** or **File → Export as Text…** (⇧⌘E), edit it in any editor, and re-import.
 
 ### Text macro format (TRM)
@@ -159,16 +205,20 @@ Verbs: `MOVE x y`, `DRAG x y BTN`, `DOWN/UP x y BTN [clicks=N]` (BTN = `L`/`R`/`
 ### Command-line converter
 
 ```bash
-# Convert a TinyTask file to a TinyRecorder macro (or to text):
-TinyRecorder.app/Contents/MacOS/TinyRecorder --convert macro.rec macro.tinyrec
-TinyRecorder.app/Contents/MacOS/TinyRecorder --convert macro.rec macro.txt
+# Convert a Windows TinyTask file to a native macro (or to text):
+TinyTask.app/Contents/MacOS/TinyTask --convert macro.rec macro.tinyrec
+TinyTask.app/Contents/MacOS/TinyTask --convert macro.rec macro.txt
 ```
 
 The output format is chosen by the output file's extension (`.tinyrec`/`.json` or `.txt`/`.trm`).
 
 ## Development
 
-Build with `./build.sh` — it compiles the SwiftPM package, assembles `TinyRecorder.app`, stamps the build number from git, and ad-hoc signs so Accessibility approval sticks across rebuilds. Sources live in `Sources/TinyRecorder/`.
+Build with `./build.sh` — it compiles the SwiftPM package, assembles `TinyTask.app`, stamps the build number from git, and signs with an available development identity (or ad-hoc signing). Sources live in `Sources/TinyRecorder/`.
+
+The existing Xcode project and scheme are named `TinyRecorder`; their app output is `TinyTask.app`.
+
+Run scheduler regression tests with `swift test`. To build a local app without replacing an installed copy, use `TINYTASK_INSTALL_DIR="$PWD/.build/local" ./build.sh`.
 
 Requires the macOS 26 SDK (Xcode 26+) to compile the Liquid Glass layer; the app itself runs on macOS 14 or newer, with standard vibrancy on macOS 14–15. The app must **not** be sandboxed — `CGEventTap` recording and `CGEvent` posting require it off.
 
@@ -189,6 +239,8 @@ Requires the macOS 26 SDK (Xcode 26+) to compile the Liquid Glass layer; the app
 | `WelcomeWindow.swift` | Onboarding wizard |
 | `MacroEditor.swift` | Timeline + table + inspector editor |
 | `PopoverContentView.swift` | Library UI (popover & main window) |
+| `MacroScheduler.swift` | Persistent one-time schedules, conflict/missed-run handling |
+| `ScheduleWindow.swift` | Timer/alarm composer and schedule queue |
 | `ActivityCenterView.swift` | Live recording/countdown/playback progress surface |
 | `QuickRunPalette.swift` | ⌘K fuzzy macro and command launcher |
 | `SoundController.swift` | Optional audio feedback |
@@ -200,7 +252,7 @@ Requires the macOS 26 SDK (Xcode 26+) to compile the Liquid Glass layer; the app
 
 - **Screen-coordinate based.** Macros replay the exact pixel positions they were recorded at, so resizing or moving target windows between record and play will misfire.
 - **Hardened input paths.** A few apps (some banking apps, secure password fields) reject synthesized input. That's by design at the OS layer.
-- **Reserved shortcuts.** Globally-reserved system shortcuts like ⌘Space can't be rebound as TinyRecorder hotkeys.
+- **Reserved shortcuts.** Globally-reserved system shortcuts like ⌘Space can't be rebound as TinyTask hotkeys.
 
 ## License
 

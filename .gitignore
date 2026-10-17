@@ -2,6 +2,7 @@
 .build/
 .swiftpm/
 TinyRecorder*.app/
+TinyTask*.app/
 
 # macOS
 .DS_Store
@@ -11,6 +12,10 @@ Icon?
 *.xcodeproj/xcuserdata/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 DerivedData/
+
+# Local development records (kept out of the repo)
+development/
+AGENTS.md
 
 # Editor/session
 *.xcuserstate

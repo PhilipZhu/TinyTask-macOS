@@ -177,7 +177,7 @@ final class Recorder: ObservableObject {
             callback: callback,
             userInfo: refcon
         ) else {
-            NSLog("TinyRecorder: failed to create event tap. Grant Accessibility & Input Monitoring permission.")
+            NSLog("TinyTask: macOS rejected the recording event tap. Recheck event access and the running app copy.")
             return false
         }
 
@@ -254,7 +254,7 @@ final class Recorder: ObservableObject {
 
         guard let kind = RecordedEvent.Kind(rawValue: Int(type.rawValue)) else { return }
 
-        // Never capture interaction with TinyRecorder itself. In particular, the
+        // Never capture interaction with TinyTask itself. In particular, the
         // floating HUD's Stop button is delivered to the global event tap before
         // its SwiftUI action stops the recorder; without this guard every macro
         // stopped from the HUD ended with a click at the HUD's screen position.
@@ -268,7 +268,7 @@ final class Recorder: ObservableObject {
             return
         }
 
-        // A menu-bar popover can activate TinyRecorder during capture without
+        // A menu-bar popover can activate TinyTask during capture without
         // occupying the pointer's eventual key-event location. Never serialize
         // typing or shortcuts while this app itself owns keyboard focus.
         if kind.isKey, NSApp.isActive { return }

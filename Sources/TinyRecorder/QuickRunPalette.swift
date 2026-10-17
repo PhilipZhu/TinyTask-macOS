@@ -70,7 +70,6 @@ struct QuickRunPalette: View {
                     )
             )
             .shadow(color: .black.opacity(0.30), radius: 28, y: 14)
-            .interactiveLift3D(intensity: 0.14, cornerRadius: 16)
             .padding(.horizontal, compact ? 14 : 24)
         }
         .onAppear {
@@ -164,7 +163,7 @@ struct QuickRunPalette: View {
                     }
                     .padding(6)
                 }
-                .frame(maxHeight: compact ? 292 : 336)
+                .frame(maxHeight: compact ? 230 : 240)
                 .onChange(of: selectedIndex) { _, index in
                     guard entries.indices.contains(index) else { return }
                     withAnimation(.easeOut(duration: 0.12)) {
@@ -226,7 +225,6 @@ struct QuickRunPalette: View {
             .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
-        .interactiveLift3D(intensity: selected ? 0.32 : 0.18, cornerRadius: 10)
         .accessibilityLabel(
             "\(entry.title), \(entry.subtitle)" +
                 (entry.trailing.map { ", \($0)" } ?? "")
@@ -317,7 +315,7 @@ struct QuickRunPalette: View {
             Entry(
                 id: "command-import",
                 title: "Import Macro…",
-                subtitle: "TinyRecorder, TinyTask, JSON, or text",
+                subtitle: "TinyTask, Windows .rec, JSON, or text",
                 symbol: "square.and.arrow.down",
                 tint: Brand.sigBlue,
                 action: .importFile,

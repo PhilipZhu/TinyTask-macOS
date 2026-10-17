@@ -19,6 +19,11 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     let player = Player()
     let state = AppState()
     let library = MacroLibrary()
+    let scheduler = MacroScheduler()
+    private var scheduleWC: ScheduleWindowController?
+    private var sessionUnavailable = false
+    private var screenLocked = false
+    private var schedulingActivity: NSObjectProtocol?
 
     private var globalHotkeyIDs: [UInt32] = []
     private var perMacroHotkeyIDs: [UInt32: UUID] = [:]   // hotkey-id → macro id
@@ -47,12 +52,98 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         observeAccessibilityRevocation()
         registerAllHotkeys()
         loadInitialMacroIntoRecorder()
+        configureScheduler()
     }
 
     deinit {
         if let m = globalClickMonitor { NSEvent.removeMonitor(m) }
         HotkeyManager.shared.unregisterAll()
         dockBadgeTimer?.invalidate()
+        if let schedulingActivity { ProcessInfo.processInfo.endActivity(schedulingActivity) }
+    }
+
+    // MARK: - Scheduling
+
+    private func configureScheduler() {
+        scheduler.unavailableReason = { [weak self] id in
+            guard let self else { return "TinyTask is unavailable. Reschedule to run it." }
+            guard let macro = self.library.macros.first(where: { $0.id == id }), !macro.events.isEmpty else {
+                return "The recording is missing or empty. Choose another recording."
+            }
+            guard self.state.onboardingComplete else { return "Finish setup, then reschedule this run." }
+            guard AXIsProcessTrusted() else { return "Grant Accessibility permission, then reschedule this run." }
+            guard let session = CGSessionCopyCurrentDictionary() as? [String: Any] else {
+                return "The login session is unavailable. Reschedule to run this recording."
+            }
+            if self.sessionUnavailable || self.screenLocked || session["CGSSessionScreenIsLocked"] as? Bool == true || session[kCGSessionOnConsoleKey as String] as? Bool == false {
+                return "The session was locked or inactive. Unlock your Mac and reschedule."
+            }
+            if self.recorder.isRecording || self.state.recordingCountdownActive || self.player.isPlaying || self.playbackPending {
+                return "TinyTask was busy recording or playing. Reschedule to run it."
+            }
+            if NSApp.modalWindow != nil || NSApp.windows.contains(where: { $0.isVisible && $0.sheetParent != nil }) {
+                return "A dialog was open. Close it and reschedule to run this recording."
+            }
+            return nil
+        }
+        scheduler.onRun = { [weak self] id in
+            guard let self else { return }
+            self.prepareInterfaceForPlayback()
+            self.playMacroByID(id)
+        }
+        let workspace = NSWorkspace.shared.notificationCenter
+        workspace.publisher(for: NSWorkspace.willSleepNotification)
+            .sink { [weak self] _ in self?.scheduler.suspend() }.store(in: &cancellables)
+        workspace.publisher(for: NSWorkspace.didWakeNotification)
+            .sink { [weak self] _ in self?.scheduler.resume() }.store(in: &cancellables)
+        workspace.publisher(for: NSWorkspace.sessionDidResignActiveNotification)
+            .sink { [weak self] _ in self?.sessionUnavailable = true }.store(in: &cancellables)
+        workspace.publisher(for: NSWorkspace.sessionDidBecomeActiveNotification)
+            .sink { [weak self] _ in self?.sessionUnavailable = false }.store(in: &cancellables)
+        let distributed = DistributedNotificationCenter.default()
+        distributed.publisher(for: Notification.Name("com.apple.screenIsLocked"))
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.screenLocked = true }.store(in: &cancellables)
+        distributed.publisher(for: Notification.Name("com.apple.screenIsUnlocked"))
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.screenLocked = false }.store(in: &cancellables)
+        scheduler.$schedules.receive(on: RunLoop.main)
+            .sink { [weak self] schedules in
+                guard let self else { return }
+                self.refreshIcon()
+                // Prevent App Nap from delaying timers; ordinary system sleep
+                // remains available and missed runs are handled on wake.
+                if schedules.contains(where: { $0.status == .pending }) {
+                    if self.schedulingActivity == nil {
+                        self.schedulingActivity = ProcessInfo.processInfo.beginActivity(
+                            options: .userInitiatedAllowingIdleSystemSleep,
+                            reason: "Waiting for a scheduled macro"
+                        )
+                    }
+                } else if let activity = self.schedulingActivity {
+                    ProcessInfo.processInfo.endActivity(activity)
+                    self.schedulingActivity = nil
+                }
+            }.store(in: &cancellables)
+        scheduler.start()
+    }
+
+    func showScheduler(for macroID: UUID? = nil) {
+        stopPlaybackBeforePresenting("Schedule")
+        if popover.isShown { popover.performClose(nil) }
+        scheduleWC?.close()
+        scheduleWC = ScheduleWindowController(controller: self, macroID: macroID ?? library.currentMacroID)
+        scheduleWC?.show()
+    }
+
+    @discardableResult
+    func scheduleMacro(_ id: UUID, at date: Date, mode: MacroSchedule.Mode) -> Bool {
+        guard library.macros.contains(where: { $0.id == id && !$0.events.isEmpty }) else { return false }
+        persistCurrentMacroIfNeeded()
+        guard scheduler.set(macroID: id, fireDate: date, mode: mode) else { return false }
+        state.lastRecordedMacroID = nil
+        state.statusMessage = "Run scheduled for \(date.formatted(date: .abbreviated, time: .shortened))."
+        return true
     }
 
     // MARK: - Status item
@@ -64,7 +155,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
             button.action = #selector(togglePopover(_:))
             button.target = self
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-            button.setAccessibilityLabel("TinyRecorder")
+            button.setAccessibilityLabel("TinyTask")
         }
     }
 
@@ -102,7 +193,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         if recorder.isRecording {
             button.image = TinyIcons.recording
             button.title = " REC"
-            button.setAccessibilityLabel("TinyRecorder — recording")
+            button.setAccessibilityLabel("TinyTask — recording")
         } else if player.isPlaying {
             button.image = TinyIcons.playing
             button.title = player.isContinuous
@@ -112,7 +203,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
             let detail = player.isContinuous
                 ? "continuous playback, loop \(loop)"
                 : "\(Int((player.overallProgress * 100).rounded(.down))) percent, loop \(loop) of \(max(1, player.totalLoops))"
-            button.setAccessibilityLabel("TinyRecorder — playing, \(detail)")
+            button.setAccessibilityLabel("TinyTask — playing, \(detail)")
             let playingName = playingMacroID
                 .flatMap { id in library.macros.first(where: { $0.id == id })?.name }
                 ?? "macro"
@@ -120,8 +211,12 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         } else {
             button.image = TinyIcons.idle
             button.title = ""
-            button.setAccessibilityLabel("TinyRecorder")
-            button.toolTip = "TinyRecorder"
+            button.setAccessibilityLabel("TinyTask")
+            if let next = scheduler.pending.first {
+                button.toolTip = "Next run: \(next.fireDate.formatted(date: .abbreviated, time: .shortened))"
+            } else {
+                button.toolTip = "TinyTask"
+            }
         }
     }
 
@@ -158,7 +253,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     // MARK: - Popover
 
     private func configurePopover() {
-        popover.contentSize = NSSize(width: 400, height: 500)
+        popover.contentSize = NSSize(width: 360, height: 440)
         popover.behavior = .transient
         popover.animates = true
         popover.delegate = self
@@ -168,6 +263,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
             .environmentObject(player)
             .environmentObject(state)
             .environmentObject(library)
+            .environmentObject(scheduler)
 
         popover.contentViewController = NSHostingController(rootView: view)
     }
@@ -181,7 +277,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     }
 
     private func showPopover() {
-        stopPlaybackBeforePresenting("TinyRecorder")
+        stopPlaybackBeforePresenting("TinyTask")
         guard let button = statusItem.button else { return }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.becomeKey()
@@ -250,22 +346,17 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         // settings UI — no state-wide sink needed.
     }
 
-    /// If macOS revokes either input permission while a recording is live, the
-    /// event tap goes dead but our UI would keep "recording" forever. Stop
-    /// cleanly, keep the partial capture in the buffer, and tell the user.
+    /// Stop only when all event-listening authorization is lost. Accessibility
+    /// alone is sufficient; changes to a redundant grant must not stop capture.
     private func observeAccessibilityRevocation() {
-        Publishers.CombineLatest(state.$accessibilityGranted, state.$inputMonitoringGranted)
-            .removeDuplicates { $0.0 == $1.0 && $0.1 == $1.1 }
+        state.$permissions
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] accessibilityGranted, inputMonitoringGranted in
-                guard let self,
-                      (!accessibilityGranted || !inputMonitoringGranted),
-                      self.recorder.isRecording else { return }
+            .sink { [weak self] _ in
+                guard let self, !self.state.canRecord, self.recorder.isRecording else { return }
                 self.recorder.stopRecording()
                 self.hud?.hide()
-                self.state.statusMessage = accessibilityGranted
-                    ? "Recording stopped — Input Monitoring permission was revoked."
-                    : "Recording stopped — Accessibility permission was revoked."
+                self.state.statusMessage = "Recording stopped — macOS input access was revoked."
                 SoundController.shared.play(.error)
             }
             .store(in: &cancellables)
@@ -364,6 +455,11 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         // Only reload the recorder buffer when the CURRENT macro was deleted;
         // otherwise we'd wipe unsaved editor edits to an unrelated macro.
         let wasCurrent = (id == library.currentMacroID)
+        guard scheduler.remove(macroID: id) else {
+            state.statusMessage = scheduler.persistenceError ?? "Cancel the schedule before deleting this recording."
+            return
+        }
+        if state.lastRecordedMacroID == id { state.lastRecordedMacroID = nil }
         library.delete(id: id)
         if wasCurrent {
             if let m = library.currentMacro {
@@ -376,6 +472,13 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
 
     func deleteMacros(_ ids: Set<UUID>) {
         let wasCurrent = library.currentMacroID.map { ids.contains($0) } ?? false
+        for id in ids {
+            guard scheduler.remove(macroID: id) else {
+                state.statusMessage = scheduler.persistenceError ?? "Cancel schedules before deleting recordings."
+                return
+            }
+        }
+        if let id = state.lastRecordedMacroID, ids.contains(id) { state.lastRecordedMacroID = nil }
         library.deleteMany(ids: ids)
         if wasCurrent {
             if let m = library.currentMacro {
@@ -439,6 +542,10 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     // MARK: - Actions
 
     func toggleRecording() {
+        toggleRecording(revealSavedRecording: true)
+    }
+
+    private func toggleRecording(revealSavedRecording: Bool) {
         // A second press during the countdown means "never mind".
         if let countdown, countdown.isActive {
             countdown.cancel()
@@ -453,6 +560,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
             if count > 0 {
                 let newMacro = library.add(events: recorder.events, loops: state.loops)
                 state.statusMessage = "Saved \(newMacro.name) · \(count) events."
+                state.lastRecordedMacroID = newMacro.id
                 SoundController.shared.play(.recordStop)
                 performHaptic(.levelChange)
             } else {
@@ -465,6 +573,10 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
                 }
             }
             hud?.hide()
+            if count > 0 && revealSavedRecording {
+                if state.menuBarOnly { showPopoverProgrammatically() }
+                else { showMainWindow() }
+            }
         } else {
             beginRecordingFlow()
         }
@@ -474,8 +586,9 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     private func beginRecordingFlow() {
         // Fail immediately instead of making the user sit through a countdown
         // before discovering that macOS cannot start the capture.
-        guard state.inputMonitoringGranted else {
-            state.statusMessage = "Input Monitoring permission is required to record."
+        state.refreshPermissions()
+        guard state.canRecord else {
+            state.statusMessage = "Allow Accessibility or Input Monitoring to record. Open Permissions Help if already enabled."
             SoundController.shared.play(.error)
             return
         }
@@ -498,20 +611,25 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
 
     private func actuallyStartRecording() {
         state.recordingCountdownActive = false
-        guard state.inputMonitoringGranted else {
-            state.statusMessage = "Could not start recording. Grant Input Monitoring permission."
+        state.refreshPermissions()
+        guard state.canRecord else {
+            state.statusMessage = "Recording access is unavailable. Open Permissions Help to recheck this app copy."
             SoundController.shared.play(.error)
             return
         }
         let ok = recorder.startRecording()
         if ok {
+            state.permissionTroubleshootingNeeded = false
             if state.showRecordingHUD { hud?.show() }
             state.statusMessage = "Recording…"
             SoundController.shared.play(.recordStart)
             performHaptic(.generic)
         } else {
-            state.statusMessage = "Could not start recording. Check Input Monitoring permission."
+            state.permissionTroubleshootingNeeded = true
+            state.statusMessage = "macOS could not start recording. If access is enabled, reopen this app or use Permissions Help."
             SoundController.shared.play(.error)
+            if state.menuBarOnly { showPopoverProgrammatically() }
+            else { showMainWindow() }
         }
     }
 
@@ -532,6 +650,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     /// the user's escape hatch from runaway playback and discards an in-flight
     /// capture, matching the explicit "Discard" control in the recording HUD.
     func emergencyStop() {
+        let cancelled = scheduler.cancelAll()
         countdown?.cancel()
         state.recordingCountdownActive = false
         if recorder.isRecording {
@@ -539,7 +658,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
             return
         }
         if player.isPlaying || playbackPending { stopPlayback() }
-        state.statusMessage = "Emergency stop."
+        state.statusMessage = cancelled ? "Emergency stop. Pending schedules cancelled." : "Emergency stop. Could not cancel schedules; open Schedule to review."
     }
 
     private func stopPlayback() {
@@ -556,6 +675,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     }
 
     private func play(isChained: Bool) {
+        state.refreshPermissions()
         guard state.accessibilityGranted else {
             state.statusMessage = "Playback requires Accessibility permission."
             SoundController.shared.play(.error)
@@ -571,7 +691,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
             countdown.cancel()
             state.recordingCountdownActive = false
         }
-        if recorder.isRecording { toggleRecording() }
+        if recorder.isRecording { toggleRecording(revealSavedRecording: false) }
         if player.isPlaying || playbackPending { return }
         if !isChained { chainVisited.removeAll() }
         let macro = library.currentMacro
@@ -646,7 +766,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         prepareInterfaceForCapture()
     }
 
-    /// Clear TinyRecorder's working surfaces out of the target app before either
+    /// Clear TinyTask's working surfaces out of the target app before either
     /// recording or playback. This deliberately covers *every* app-owned window,
     /// not just our known controllers: an open/save panel left in front could
     /// otherwise receive synthetic typing or clicks from a global playback.
@@ -679,7 +799,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     /// Play a specific saved macro by id (used by per-macro hotkeys + library card buttons).
     func playMacroByID(_ id: UUID) {
         guard let macro = library.macros.first(where: { $0.id == id }) else { return }
-        if recorder.isRecording { toggleRecording() }
+        if recorder.isRecording { toggleRecording(revealSavedRecording: false) }
         if player.isPlaying || playbackPending { stopPlayback() }
         persistCurrentMacroIfNeeded()
         chainVisited.removeAll()
@@ -697,7 +817,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         stopPlaybackBeforePresenting("Import")
         // Finder drops and file-open events may arrive while a recording is
         // active. Save that capture before replacing the recorder buffer.
-        if recorder.isRecording { toggleRecording() }
+        if recorder.isRecording { toggleRecording(revealSavedRecording: false) }
         do {
             let data = try Data(contentsOf: url)
             let ext = url.pathExtension.lowercased()
@@ -829,7 +949,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         stopPlaybackBeforePresenting("Import")
         let panel = NSOpenPanel()
         panel.title = "Import Macro"
-        panel.message = "Import a TinyRecorder (.tinyrec), TinyTask (.rec), or text (.txt) macro."
+        panel.message = "Import a TinyTask (.tinyrec), Windows TinyTask (.rec), or text (.txt) macro."
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         let exts = ["tinyrec", "rec", "txt", "trm"]
@@ -903,14 +1023,14 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
                 payload.hotkey = nil
                 payload.chainTo = nil
                 let json = try JSONEncoder().encode(payload)
-                let exec = Bundle.main.executablePath ?? "/Applications/TinyRecorder.app/Contents/MacOS/TinyRecorder"
+                let exec = Bundle.main.executablePath ?? "/Applications/TinyTask.app/Contents/MacOS/TinyTask"
                 let macroLine = json.base64EncodedString()
                 let script = """
                 #!/bin/bash
-                # TinyRecorder self-running macro
+                # TinyTask self-running macro
                 EXEC=\(self.shellQuote(exec))
                 if [ ! -x "$EXEC" ]; then
-                    echo "TinyRecorder binary not found at $EXEC. Please install TinyRecorder."
+                    echo "TinyTask binary not found at $EXEC. Please install TinyTask."
                     exit 1
                 fi
                 TMP=$(mktemp -t tinyrec)
@@ -1003,7 +1123,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         if menuBarOnly {
             // No Dock icon now — flash the menu-bar popover so the control surface
             // is discoverable, then leave the user there.
-            state.statusMessage = "Menu-bar only. Click the menu-bar icon to open TinyRecorder."
+            state.statusMessage = "Menu-bar only. Click the menu-bar icon to open TinyTask."
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                 self?.showPopoverProgrammatically()
             }
@@ -1118,6 +1238,9 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
 
     func openAccessibilityPrefs() {
         stopPlaybackBeforePresenting("System Settings")
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
+        state.refreshPermissions()
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
@@ -1125,8 +1248,39 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
 
     func openInputMonitoringPrefs() {
         stopPlaybackBeforePresenting("System Settings")
+        _ = CGRequestListenEventAccess()
+        state.refreshPermissions()
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
             NSWorkspace.shared.open(url)
+        }
+    }
+
+    func showPermissionHelp() {
+        stopPlaybackBeforePresenting("Permissions Help")
+        state.refreshPermissions()
+        let alert = NSAlert()
+        alert.messageText = "Permissions enabled, but still blocked?"
+        alert.informativeText = """
+        Authorize the copy you are opening. This app is at:
+        \(Bundle.main.bundleURL.path)
+
+        Accessibility: \(state.accessibilityGranted ? "available" : "not available to this process")
+        Recording access: \(state.canRecord ? "available" : "not available to this process")
+
+        1. Keep one copy in Applications and open that copy.
+        2. In System Settings → Privacy & Security → Accessibility, remove a stale TinyTask/TinyRecorder entry with −, then add this exact app with + and enable it.
+        3. Quit and reopen TinyTask after changing access. Use Recheck when returning from Settings.
+
+        Accessibility allows both recording and playback. Input Monitoring alone allows recording. A checkmark for another copy or an older build may not authorize this process.
+        """
+        alert.addButton(withTitle: "Reveal This App")
+        alert.addButton(withTitle: "Recheck")
+        alert.addButton(withTitle: "Close")
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+        } else if response == .alertSecondButtonReturn {
+            state.refreshPermissions()
         }
     }
 
@@ -1164,7 +1318,7 @@ enum TinyIcons {
         img?.isTemplate = (color == nil)
         return img
     }
-    static var idle: NSImage? { make("record.circle", description: "TinyRecorder") }
-    static var recording: NSImage? { make("record.circle.fill", description: "TinyRecorder — recording", color: .systemRed) }
-    static var playing: NSImage? { make("play.circle.fill", description: "TinyRecorder — playing", color: .systemGreen) }
+    static var idle: NSImage? { make("record.circle", description: "TinyTask") }
+    static var recording: NSImage? { make("record.circle.fill", description: "TinyTask — recording", color: .systemRed) }
+    static var playing: NSImage? { make("play.circle.fill", description: "TinyTask — playing", color: .systemGreen) }
 }

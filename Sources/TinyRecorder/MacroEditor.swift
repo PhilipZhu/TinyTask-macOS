@@ -194,7 +194,7 @@ private struct EditorToolbar: View {
                 .controlSize(.regular)
                 .buttonStyle(.bordered)
                 .help("Exports a double-clickable .command script")
-                .interactiveLift3D(intensity: 0.62, cornerRadius: 8)
+                .hoverShade(cornerRadius: 8)
 
                 // Play / Stop
                 Button {
@@ -208,7 +208,7 @@ private struct EditorToolbar: View {
                 .controlSize(.regular)
                 .tint(playing ? .red : .green)
                 .buttonStyle(.borderedProminent)
-                .interactiveLift3D(intensity: 0.76, cornerRadius: 8)
+                .hoverShade(cornerRadius: 8)
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -456,7 +456,7 @@ private struct EditorSidebar: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .disabled(selection.isEmpty)
-                    .interactiveLift3D(intensity: 0.54, cornerRadius: 7)
+                    .hoverShade(cornerRadius: 7)
 
                     HStack(spacing: 6) {
                         Button(action: trimBefore) {
@@ -464,14 +464,14 @@ private struct EditorSidebar: View {
                         }
                         .frame(maxWidth: .infinity)
                         .help("Delete every event before the selected one")
-                        .interactiveLift3D(intensity: 0.50, cornerRadius: 7)
+                        .hoverShade(cornerRadius: 7)
 
                         Button(action: trimAfter) {
                             Label("Trim after", systemImage: "arrow.right.to.line")
                         }
                         .frame(maxWidth: .infinity)
                         .help("Delete every event after the selected one")
-                        .interactiveLift3D(intensity: 0.50, cornerRadius: 7)
+                        .hoverShade(cornerRadius: 7)
                     }
                     .controlSize(.small)
                     .disabled(selection.count != 1)
@@ -485,7 +485,7 @@ private struct EditorSidebar: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .disabled(rows.isEmpty)
-                    .interactiveLift3D(intensity: 0.54, cornerRadius: 7)
+                    .hoverShade(cornerRadius: 7)
                     .confirmationDialog(
                         "Remove all events from this macro?",
                         isPresented: $confirmClearAll,
@@ -516,7 +516,7 @@ private struct EditorSidebar: View {
                         Button("Reset") { stretchFactor = 1.0 }
                             .buttonStyle(.borderless)
                             .controlSize(.small)
-                            .interactiveLift3D(intensity: 0.44, cornerRadius: 6)
+                            .hoverShade(cornerRadius: 6)
                     }
                     Text("> 1× slower · < 1× faster.")
                         .font(.system(size: 10))
@@ -528,7 +528,7 @@ private struct EditorSidebar: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     .disabled(rows.isEmpty || abs(stretchFactor - 1.0) < 0.001)
-                    .interactiveLift3D(intensity: 0.60, cornerRadius: 7)
+                    .hoverShade(cornerRadius: 7)
                 }
 
                 section("Insert wait", icon: "hourglass") {
@@ -547,7 +547,7 @@ private struct EditorSidebar: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     .disabled(rows.isEmpty)
-                    .interactiveLift3D(intensity: 0.60, cornerRadius: 7)
+                    .hoverShade(cornerRadius: 7)
                 }
 
                 section("Shift selected", icon: "arrow.left.and.right") {
@@ -562,13 +562,13 @@ private struct EditorSidebar: View {
                             Label("Earlier", systemImage: "minus")
                         }
                         .frame(maxWidth: .infinity)
-                        .interactiveLift3D(intensity: 0.50, cornerRadius: 7)
+                        .hoverShade(cornerRadius: 7)
 
                         Button { shiftSelection(by:  shiftMs / 1000.0) } label: {
                             Label("Later", systemImage: "plus")
                         }
                         .frame(maxWidth: .infinity)
-                        .interactiveLift3D(intensity: 0.50, cornerRadius: 7)
+                        .hoverShade(cornerRadius: 7)
                     }
                     .controlSize(.small)
                     .disabled(selection.isEmpty)
@@ -613,7 +613,7 @@ private struct EditorSidebar: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
-                        .interactiveLift3D(intensity: 0.60, cornerRadius: 7)
+                        .hoverShade(cornerRadius: 7)
                     } else if selection.count > 1 {
                         emptyInspector(
                             icon: "square.stack",
@@ -938,7 +938,7 @@ private struct EventRowView: View {
         .contentShape(Rectangle())
         .onHover { hovered = $0 }
         .onTapGesture { onTap(NSApp.currentEvent?.modifierFlags ?? []) }
-        .interactiveLift3D(intensity: 0.26, cornerRadius: 5)
+        .hoverShade(cornerRadius: 5)
     }
 }
 

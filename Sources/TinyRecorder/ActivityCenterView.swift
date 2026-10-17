@@ -4,7 +4,7 @@ import AppKit
 /// Finder-style live activity surface shared by the Dock window and menu-bar
 /// popover. It turns the app's otherwise terse status strings into useful,
 /// glanceable recording/playback telemetry without keeping a large dashboard
-/// on screen while TinyRecorder is idle.
+/// on screen while TinyTask is idle.
 struct ActivityCenterView: View {
     let controller: MenuBarController
     var compact = false
@@ -105,7 +105,6 @@ struct ActivityCenterView: View {
         .padding(.vertical, compact ? 9 : 10)
         .background(activityBackground)
         .shadow(color: tint.opacity(0.10), radius: 8, y: 3)
-        .interactiveLift3D(intensity: 0.28, cornerRadius: 11)
         .accessibilityElement(children: .contain)
     }
 
@@ -189,7 +188,7 @@ struct ActivityCenterView: View {
                 )
         }
         .buttonStyle(HoverPressButtonStyle())
-        .interactiveLift3D(intensity: 0.62, cornerRadius: 999)
+        .hoverShade(cornerRadius: 999)
         .help(help)
         .accessibilityLabel(help)
     }

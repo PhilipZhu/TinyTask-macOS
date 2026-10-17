@@ -84,6 +84,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBar?.presentQuickRun()
     }
 
+    @objc func scheduleMacro(_ sender: Any?) {
+        menuBar?.showScheduler()
+    }
+
     // MARK: - File menu actions
 
     @objc func newRecording(_ sender: Any?) {
@@ -139,7 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
         let about = NSMenuItem(
-            title: "About TinyRecorder",
+            title: "About TinyTask",
             action: #selector(showAbout(_:)),
             keyEquivalent: ""
         )
@@ -155,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appMenu.addItem(prefs)
         appMenu.addItem(.separator())
         appMenu.addItem(NSMenuItem(
-            title: "Hide TinyRecorder",
+            title: "Hide TinyTask",
             action: #selector(NSApplication.hide(_:)),
             keyEquivalent: "h"
         ))
@@ -173,7 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ))
         appMenu.addItem(.separator())
         appMenu.addItem(NSMenuItem(
-            title: "Quit TinyRecorder",
+            title: "Quit TinyTask",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         ))
@@ -192,7 +196,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fileMenu.addItem(.separator())
         let imp = NSMenuItem(title: "Import Macro…", action: #selector(importMacro(_:)), keyEquivalent: "o")
         imp.target = self
-        imp.toolTip = "Import a TinyRecorder (.tinyrec), TinyTask (.rec), or text (.txt) macro"
+        imp.toolTip = "Import a TinyTask (.tinyrec), Windows TinyTask (.rec), or text (.txt) macro"
         fileMenu.addItem(imp)
         let exp = NSMenuItem(title: "Export as Shell Script…", action: #selector(exportMacro(_:)), keyEquivalent: "e")
         exp.target = self
@@ -239,6 +243,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let play = NSMenuItem(title: "Play", action: #selector(playMacro(_:)), keyEquivalent: "p")
         play.target = self
         macroMenu.addItem(play)
+        let schedule = NSMenuItem(title: "Schedule Run…", action: #selector(scheduleMacro(_:)), keyEquivalent: "s")
+        schedule.keyEquivalentModifierMask = [.command, .shift]
+        schedule.target = self
+        macroMenu.addItem(schedule)
         let openEdit = NSMenuItem(title: "Open Editor…", action: #selector(openEditor(_:)), keyEquivalent: "e")
         openEdit.keyEquivalentModifierMask = [.command, .option]
         openEdit.target = self
@@ -276,7 +284,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let helpItem = NSMenuItem()
         let helpMenu = NSMenu(title: "Help")
         let help = NSMenuItem(
-            title: "TinyRecorder Help",
+            title: "TinyTask Help",
             action: #selector(AppDelegate.showHelp(_:)),
             keyEquivalent: "?"
         )

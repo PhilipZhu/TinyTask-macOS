@@ -23,13 +23,14 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
                 .environmentObject(controller.player)
                 .environmentObject(controller.state)
                 .environmentObject(controller.library)
+                .environmentObject(controller.scheduler)
         )
 
         let win = NSWindow(contentViewController: host)
-        win.title = "TinyRecorder"
-        win.setContentSize(NSSize(width: 720, height: 460))
+        win.title = "TinyTask"
+        win.setContentSize(NSSize(width: 640, height: 430))
         win.styleMask = [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView]
-        win.minSize = NSSize(width: 620, height: 390)
+        win.minSize = NSSize(width: 560, height: 360)
         win.isReleasedWhenClosed = false
         win.titlebarAppearsTransparent = true
         win.titleVisibility = .hidden
@@ -38,7 +39,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         win.isMovableByWindowBackground = true
         // New autosave key intentionally resets the former dashboard-sized frame
         // to this compact utility footprint on first launch of the redesign.
-        restoreFrameOrCenter(win, name: "TinyRecorder.MainWindow.CompactV2")
+        restoreFrameOrCenter(win, name: "TinyRecorder.MainWindow.CompactV3")
         super.init(window: win)
         win.delegate = self
     }
@@ -65,11 +66,11 @@ final class SettingsWindowController: NSWindowController {
         win.title = "Settings"
         win.styleMask = [.titled, .closable]
         win.isReleasedWhenClosed = false
-        let settingsSize = NSSize(width: 580, height: 430)
+        let settingsSize = NSSize(width: 520, height: 400)
         win.setContentSize(settingsSize)
         win.contentMinSize = settingsSize
         win.contentMaxSize = settingsSize
-        restoreFrameOrCenter(win, name: "TinyRecorder.Settings")
+        restoreFrameOrCenter(win, name: "TinyRecorder.Settings.Compact")
         super.init(window: win)
     }
 

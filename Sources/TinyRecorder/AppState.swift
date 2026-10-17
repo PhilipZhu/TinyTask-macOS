@@ -2,12 +2,25 @@ import Foundation
 import SwiftUI
 import Combine
 import ApplicationServices
-import IOKit.hid
+import CoreGraphics
+import AppKit
 
 /// Simple key code description used for hotkey labels.
 struct HotkeyBinding: Codable, Equatable, Sendable {
     var keyCode: UInt32
     var name: String
+}
+
+/// Accessibility authorizes event listening as well as posting. A missing
+/// separate Input Monitoring grant must not block an Accessibility-authorized tap.
+struct EventPermissions: Equatable {
+    var accessibility: Bool
+    var listening: Bool
+    var canRecord: Bool { accessibility || listening }
+
+    static func current() -> EventPermissions {
+        EventPermissions(accessibility: AXIsProcessTrusted(), listening: CGPreflightListenEventAccess())
+    }
 }
 
 /// User-configurable settings persisted in UserDefaults.
@@ -28,15 +41,14 @@ final class AppState: ObservableObject {
         didSet { persist(playHotkey, key: "hk_play") }
     }
     @Published var statusMessage: String = ""
+    @Published var lastRecordedMacroID: UUID?
     /// Ephemeral UI state for the pre-record overlay. Kept here so every active
     /// surface can label the record toggle accurately while the countdown runs.
     @Published var recordingCountdownActive: Bool = false
-    @Published var accessibilityGranted: Bool = AXIsProcessTrusted()
-    /// Input Monitoring is a separate TCC permission from Accessibility; both are
-    /// required to record. Polled live alongside Accessibility so the UI reflects
-    /// grants made in System Settings without a relaunch.
-    @Published var inputMonitoringGranted: Bool =
-        IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
+    @Published private(set) var permissions: EventPermissions
+    @Published var permissionTroubleshootingNeeded = false
+    var accessibilityGranted: Bool { permissions.accessibility }
+    var canRecord: Bool { permissions.canRecord }
 
     /// Pre-record countdown seconds. 0 disables.
     @Published var countdownSeconds: Int {
@@ -53,7 +65,7 @@ final class AppState: ObservableObject {
     @Published var showRecordingHUD: Bool {
         didSet { UserDefaults.standard.set(showRecordingHUD, forKey: "showRecordingHUD") }
     }
-    /// Orders TinyRecorder's own windows out before synthetic input begins, so
+    /// Orders TinyTask's own windows out before synthetic input begins, so
     /// recorded coordinates can never click the library/editor that launched it.
     @Published var hideDuringPlayback: Bool {
         didSet { UserDefaults.standard.set(hideDuringPlayback, forKey: "hideDuringPlayback") }
@@ -69,8 +81,12 @@ final class AppState: ObservableObject {
     }
 
     private var refreshTimer: Timer?
+    private var activationObserver: NSObjectProtocol?
+    private let permissionReader: () -> EventPermissions
 
-    init() {
+    init(permissionReader: @escaping () -> EventPermissions = EventPermissions.current) {
+        self.permissionReader = permissionReader
+        self.permissions = permissionReader()
         let d = UserDefaults.standard
         self.loops = normalizedLoopCount(d.object(forKey: "loops") as? Int ?? 1)
         self.speed = d.object(forKey: "speed") as? Double ?? 1.0
@@ -99,22 +115,19 @@ final class AppState: ObservableObject {
         }
         RunLoop.main.add(timer, forMode: .common)
         refreshTimer = timer
+        activationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.refreshPermissions() }
     }
 
     deinit {
         refreshTimer?.invalidate()
+        if let activationObserver { NotificationCenter.default.removeObserver(activationObserver) }
     }
 
     func refreshPermissions() {
-        let trusted = AXIsProcessTrusted()
-        if trusted != accessibilityGranted {
-            accessibilityGranted = trusted
-        }
-
-        let inputOK = IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
-        if inputOK != inputMonitoringGranted {
-            inputMonitoringGranted = inputOK
-        }
+        let latest = permissionReader()
+        if latest != permissions { permissions = latest }
     }
 
     private func persist(_ binding: HotkeyBinding, key: String) {

@@ -302,8 +302,6 @@ private struct HUDButton: View {
     let tint: Color?
     let action: () -> Void
 
-    @State private var hovered = false
-
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
@@ -331,13 +329,12 @@ private struct HUDButton: View {
                             .strokeBorder(Color.white.opacity(tint != nil ? 0.22 : 0.10), lineWidth: 0.5)
                     )
                     .shadow(
-                        color: (tint ?? .black).opacity(hovered ? 0.32 : (tint != nil ? 0.28 : 0.14)),
-                        radius: hovered ? 7 : 4, y: 2
+                        color: (tint ?? .black).opacity(tint != nil ? 0.28 : 0.14),
+                        radius: 4, y: 2
                     )
             )
         }
         .buttonStyle(HoverPressButtonStyle())
-        .onHover { hovered = $0 }
-        .interactiveLift3D(intensity: 0.82, cornerRadius: 12)
+        .hoverShade(cornerRadius: 12)
     }
 }

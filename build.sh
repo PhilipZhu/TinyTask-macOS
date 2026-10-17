@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build TinyRecorder.app and install it to /Applications.
+# Build TinyTask.app and install it to /Applications.
 #
 # Why /Applications: macOS ties Accessibility / Input Monitoring (TCC) grants to a
 # bundle's path *and* code signature. A single bundle at the standard, immutable
@@ -14,7 +14,7 @@
 # re-prompt for permissions after each rebuild.
 set -euo pipefail
 
-APP_NAME="TinyRecorder"
+APP_NAME="TinyTask"
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="${ROOT}/.build/release"
 STAGE="${ROOT}/.build/${APP_NAME}.app"        # assembled here first (gitignored)
@@ -22,24 +22,34 @@ STAGE="${ROOT}/.build/${APP_NAME}.app"        # assembled here first (gitignored
 # without disturbing the /Applications install). Expand a leading ~ ourselves —
 # parameter expansion does not, and an unexpanded ~ would create a literal "~"
 # directory that later rm -rf / cp target by mistake.
-INSTALL_DIR="${TINYRECORDER_INSTALL_DIR:-/Applications}"
+INSTALL_DIR="${TINYTASK_INSTALL_DIR:-${TINYRECORDER_INSTALL_DIR:-/Applications}}"
 INSTALL_DIR="${INSTALL_DIR/#\~/$HOME}"
 APP_BUNDLE="${INSTALL_DIR}/${APP_NAME}.app"   # final location
 CONTENTS="${STAGE}/Contents"
 
 cd "$ROOT"
 
-# Regenerate the icon if the source script is newer than the .icns (or it's missing).
-if [ ! -f "AppIcon.icns" ] || [ "tools/make_icon.swift" -nt "AppIcon.icns" ]; then
+# Never replace the executable/signature underneath a running process: macOS
+# permission checks would still belong to the old process and signing identity.
+if /bin/ps -axww -o comm= | /usr/bin/awk -v app_exec="$APP_BUNDLE/Contents/MacOS/$APP_NAME" '
+    $0 == app_exec { found = 1 }
+    END { exit !found }
+'; then
+    echo "Quit TinyTask (Cmd-Q), then run ./build.sh again. The install destination is still running." >&2
+    exit 1
+fi
+
+# Repackage when either the master artwork or packaging script changes.
+if [ ! -f "AppIcon.icns" ] || [ "tools/make_icon.swift" -nt "AppIcon.icns" ] || [ "Assets/TinyTaskIcon.png" -nt "AppIcon.icns" ]; then
     echo "→ Generating AppIcon.icns..."
     swift tools/make_icon.swift
     iconutil -c icns AppIcon.iconset -o AppIcon.icns
 fi
 
 echo "→ Compiling (release)..."
-# Extra swiftc flags can be injected, e.g. TINYRECORDER_SWIFT_FLAGS="-Xswiftc -DHIDE_PERMISSION_BANNER".
+# Extra swiftc flags can be injected, e.g. TINYTASK_SWIFT_FLAGS="-Xswiftc -DHIDE_PERMISSION_BANNER".
 # Unquoted on purpose so multiple flags word-split into separate arguments.
-swift build -c release ${TINYRECORDER_SWIFT_FLAGS:-}
+swift build -c release ${TINYTASK_SWIFT_FLAGS:-${TINYRECORDER_SWIFT_FLAGS:-}}
 
 echo "→ Bundling ${APP_NAME}.app..."
 rm -rf "$STAGE"
@@ -80,13 +90,13 @@ sign_app() {
 # Prefer a Developer ID Application identity when one is installed: a stable
 # signature means TCC (Accessibility / Input Monitoring) grants persist across
 # rebuilds, and it's a prerequisite for notarization. Override by exporting
-# TINYRECORDER_SIGN_ID="Developer ID Application: Name (TEAMID)". Falls back to
+# TINYTASK_SIGN_ID="Developer ID Application: Name (TEAMID)". Falls back to
 # ad-hoc signing until a Developer ID cert exists (then grants re-prompt per build).
 # List identities once. The trailing `|| true` on each pipeline matters: under
 # `set -euo pipefail` a grep with no match exits non-zero and would abort the
 # build, so we swallow that and just end up with an empty SIGN_ID.
 SIGN_IDS=$(security find-identity -v -p codesigning 2>/dev/null || true)
-SIGN_ID="${TINYRECORDER_SIGN_ID:-}"
+SIGN_ID="${TINYTASK_SIGN_ID:-${TINYRECORDER_SIGN_ID:-}}"
 # 1) Prefer a Developer ID Application cert — distribution-ready & notarizable.
 if [ -z "$SIGN_ID" ]; then
     SIGN_ID=$(printf '%s\n' "$SIGN_IDS" | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)"$/\1/' || true)

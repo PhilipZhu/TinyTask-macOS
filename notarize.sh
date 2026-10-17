@@ -1,5 +1,5 @@
 #!/bin/bash
-# Notarize and staple the installed TinyRecorder.app so other people can run it
+# Notarize and staple the installed TinyTask.app so other people can run it
 # without Gatekeeper warnings. Requires:
 #   1. A Developer ID-signed build (run ./build.sh with a Developer ID cert).
 #   2. Notary credentials stored ONCE in the keychain (no secrets live in this
@@ -15,11 +15,11 @@
 set -euo pipefail
 
 # Honor the same install-dir override build.sh uses (expand a leading ~).
-INSTALL_DIR="${TINYRECORDER_INSTALL_DIR:-/Applications}"
+INSTALL_DIR="${TINYTASK_INSTALL_DIR:-${TINYRECORDER_INSTALL_DIR:-/Applications}}"
 INSTALL_DIR="${INSTALL_DIR/#\~/$HOME}"
-APP="${INSTALL_DIR}/TinyRecorder.app"
+APP="${INSTALL_DIR}/TinyTask.app"
 PROFILE="tinyrecorder-notary"
-ZIP="$(mktemp -d)/TinyRecorder.zip"
+ZIP="$(mktemp -d)/TinyTask.zip"
 
 if [ ! -d "$APP" ]; then
     echo "✗ $APP not found. Run ./build.sh first." >&2

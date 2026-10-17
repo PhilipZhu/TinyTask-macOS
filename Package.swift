@@ -2,15 +2,16 @@
 import PackageDescription
 
 let package = Package(
-    name: "TinyRecorder",
+    name: "TinyTask",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "TinyRecorder", targets: ["TinyRecorder"])
+        .executable(name: "TinyTask", targets: ["TinyRecorder"])
     ],
     targets: [
         .executableTarget(
             name: "TinyRecorder",
             path: "Sources/TinyRecorder"
-        )
+        ),
+        .testTarget(name: "TinyRecorderTests", dependencies: ["TinyRecorder"])
     ]
 )

@@ -112,7 +112,7 @@ extension View {
 
 // MARK: - Wordmark
 
-/// The "tiny Recorder" wordmark — italic serif "tiny" + semibold "Recorder".
+/// The "tiny Task" wordmark — italic serif "tiny" + semibold "Task".
 struct Wordmark: View {
     var size: CGFloat = 13
     var body: some View {
@@ -121,13 +121,13 @@ struct Wordmark: View {
                 .font(.system(size: size * 1.25, weight: .regular, design: .serif))
                 .italic()
                 .foregroundStyle(.secondary)
-            Text("Recorder")
+            Text("Task")
                 .font(.system(size: size, weight: .semibold))
                 .foregroundStyle(.primary)
                 .tracking(-0.3)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("TinyRecorder")
+        .accessibilityLabel("TinyTask")
     }
 }
 
@@ -166,12 +166,10 @@ extension View {
         modifier(CardSurface(cornerRadius: cornerRadius))
     }
 
-    /// Pointer-aware depth shared by the app's interactive surfaces. The view
-    /// tilts toward the cursor, lifts, catches a soft specular highlight, and
-    /// casts a deeper contact shadow. `intensity` lets tiny controls stay crisp
-    /// while cards use a broader, slower motion.
-    func interactiveLift3D(intensity: CGFloat = 1, cornerRadius: CGFloat = 8) -> some View {
-        modifier(InteractiveLift3D(intensity: intensity, cornerRadius: cornerRadius))
+    /// Flat hover feedback shared by the app's interactive surfaces: a light
+    /// shade over the control's shape, with no movement, tilt or shadow change.
+    func hoverShade(cornerRadius: CGFloat = 8) -> some View {
+        modifier(HoverShade(cornerRadius: cornerRadius))
     }
 }
 
@@ -190,112 +188,33 @@ private struct CardSurface: ViewModifier {
     }
 }
 
-// MARK: - Pointer-aware 3D interaction
+// MARK: - Hover shade
 
-private struct InteractiveLift3D: ViewModifier {
-    let intensity: CGFloat
+private struct HoverShade: ViewModifier {
     let cornerRadius: CGFloat
 
     @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovered = false
-    @State private var pointer = CGPoint.zero
-    @State private var surfaceSize = CGSize.zero
-
-    private var visuallyActive: Bool { hovered && isEnabled }
-    private var motionActive: Bool { visuallyActive && !reduceMotion }
-
-    private var normalizedX: CGFloat {
-        guard surfaceSize.width > 0 else { return 0 }
-        return max(-1, min(1, (pointer.x / surfaceSize.width - 0.5) * 2))
-    }
-
-    private var normalizedY: CGFloat {
-        guard surfaceSize.height > 0 else { return 0 }
-        return max(-1, min(1, (pointer.y / surfaceSize.height - 0.5) * 2))
-    }
 
     func body(content: Content) -> some View {
         content
-            .background(
-                GeometryReader { proxy in
-                    Color.clear
-                        .onAppear { surfaceSize = proxy.size }
-                        .onChange(of: proxy.size) { _, newSize in surfaceSize = newSize }
-                }
-            )
-            .scaleEffect(motionActive ? 1 + 0.022 * intensity : 1)
-            .rotation3DEffect(
-                .degrees(motionActive ? Double(-normalizedY * 4.2 * intensity) : 0),
-                axis: (x: 1, y: 0, z: 0),
-                anchor: .center,
-                perspective: 0.72
-            )
-            .rotation3DEffect(
-                .degrees(motionActive ? Double(normalizedX * 5.0 * intensity) : 0),
-                axis: (x: 0, y: 1, z: 0),
-                anchor: .center,
-                perspective: 0.72
-            )
-            .rotationEffect(.degrees(motionActive ? Double(normalizedX * 0.35 * intensity) : 0))
-            .offset(y: motionActive ? -2.0 * intensity : 0)
-            .brightness(visuallyActive ? 0.025 * intensity : 0)
-            .contrast(visuallyActive ? 1.015 : 1)
-            .shadow(
-                color: .black.opacity(visuallyActive ? 0.22 * intensity : 0),
-                radius: visuallyActive ? 7 * intensity : 0,
-                x: motionActive ? normalizedX * -1.5 * intensity : 0,
-                y: visuallyActive ? 4 * intensity : 0
-            )
-            .shadow(
-                color: .white.opacity(visuallyActive ? 0.10 * intensity : 0),
-                radius: visuallyActive ? 1.5 * intensity : 0,
-                x: motionActive ? normalizedX * intensity : 0,
-                y: visuallyActive ? -1 * intensity : 0
-            )
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [.white.opacity(0.13), .white.opacity(0.025), .clear],
-                            startPoint: UnitPoint(
-                                x: max(0, min(1, 0.28 + normalizedX * 0.18)),
-                                y: max(0, min(1, 0.08 + normalizedY * 0.12))
-                            ),
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .opacity(visuallyActive ? intensity : 0)
-                    .blendMode(.screen)
+                    .fill(Color.primary.opacity(hovered && isEnabled ? 0.07 : 0))
+                    .animation(.easeOut(duration: 0.12), value: hovered)
                     .allowsHitTesting(false)
             }
-            .zIndex(visuallyActive ? 20 : 0)
-            .animation(.spring(response: 0.32, dampingFraction: 0.68), value: hovered)
-            .animation(.easeOut(duration: 0.075), value: pointer)
-            .onContinuousHover { phase in
-                switch phase {
-                case .active(let location):
-                    pointer = location
-                    hovered = isEnabled
-                case .ended:
-                    hovered = false
-                    pointer = CGPoint(x: surfaceSize.width / 2, y: surfaceSize.height / 2)
-                }
-            }
+            .onHover { hovered = $0 }
     }
 }
 
-// MARK: - Press response (paired with interactiveLift3D)
+// MARK: - Press response (paired with hoverShade)
 
 struct HoverPressButtonStyle: ButtonStyle {
-    var pressScale: CGFloat = 0.96
-
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? pressScale : 1)
-            .offset(y: configuration.isPressed ? 1 : 0)
-            .brightness(configuration.isPressed ? -0.035 : 0)
-            .animation(.spring(response: 0.15, dampingFraction: 0.62), value: configuration.isPressed)
+            .brightness(configuration.isPressed ? -0.06 : 0)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
     }
 }
 
@@ -384,88 +303,29 @@ struct RecDot: View {
     }
 }
 
-// MARK: - Brand mark (reel-and-smile tape face from the design)
+// MARK: - Brand mark
 
+/// Use the shipped multiresolution icon so Dock and in-app branding match.
 struct BrandMark: View {
     var size: CGFloat = 30
-    @Environment(\.colorScheme) private var scheme
+    private static let icon = Bundle.main.url(forResource: "AppIcon", withExtension: "icns")
+        .flatMap { NSImage(contentsOf: $0) }
 
     var body: some View {
-        let dark = scheme == .dark
-        let s = size
-        let corner = s * 0.23
-        ZStack {
-            // Body
-            RoundedRectangle(cornerRadius: corner, style: .continuous)
-                .fill(LinearGradient(
-                    colors: dark
-                        ? [Color(red: 0.137, green: 0.145, blue: 0.18), Color(red: 0.051, green: 0.055, blue: 0.071)]
-                        : [.white, Color(red: 0.894, green: 0.902, blue: 0.925)],
-                    startPoint: .top, endPoint: .bottom))
-                .overlay(  // top-left sheen
-                    RoundedRectangle(cornerRadius: corner, style: .continuous)
-                        .fill(RadialGradient(
-                            colors: [Color.white.opacity(dark ? 0.10 : 0.55), .clear],
-                            center: .init(x: 0.3, y: 0.2), startRadius: 0, endRadius: s * 0.7)))
-                .overlay(
-                    RoundedRectangle(cornerRadius: corner, style: .continuous)
-                        .strokeBorder(dark ? Color.white.opacity(0.08) : Color.black.opacity(0.06), lineWidth: 0.8))
-                .shadow(color: .black.opacity(dark ? 0.5 : 0.18), radius: s * 0.10, x: 0, y: s * 0.04)
-
-            // Smile
-            SmileShape()
-                .stroke(dark ? Color(red: 0.953, green: 0.957, blue: 0.969) : Color(red: 0.078, green: 0.086, blue: 0.110),
-                        style: StrokeStyle(lineWidth: s * 0.025, lineCap: .round))
-                .frame(width: s, height: s)
-
-            // Reels
-            reel(cx: 0.31, cy: 0.44, dark: dark)
-            reel(cx: 0.69, cy: 0.44, dark: dark)
-
-            // Rec dot (top-right)
-            Circle()
-                .fill(Brand.red500)
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.40), lineWidth: 0.8))
-                .frame(width: s * 0.06, height: s * 0.06)
-                .position(x: s * 0.83, y: s * 0.21)
+        Group {
+            if let icon = Self.icon {
+                Image(nsImage: icon)
+                    .resizable()
+                    .interpolation(.high)
+            } else {
+                // Bundle-less SwiftPM previews have no app resource directory.
+                Image(systemName: "play.circle.fill")
+                    .resizable()
+                    .foregroundStyle(Brand.red400)
+                    .padding(size * 0.12)
+            }
         }
-        .frame(width: s, height: s)
+        .frame(width: size, height: size)
         .accessibilityHidden(true)
-    }
-
-    @ViewBuilder
-    private func reel(cx: CGFloat, cy: CGFloat, dark: Bool) -> some View {
-        let s = size
-        let r = s * 0.165
-        ZStack {
-            Circle()
-                .fill(LinearGradient(
-                    colors: [Color(red: 0.165, green: 0.176, blue: 0.212), Color(red: 0.039, green: 0.043, blue: 0.055)],
-                    startPoint: .top, endPoint: .bottom))
-                .overlay(Circle().strokeBorder(dark ? Color.white.opacity(0.10) : Color.black.opacity(0.30), lineWidth: 0.6))
-                .frame(width: r * 2, height: r * 2)
-            Circle()
-                .fill(RadialGradient(
-                    colors: [Brand.red400, Brand.red600],
-                    center: .init(x: 0.4, y: 0.35), startRadius: 0, endRadius: s * 0.05))
-                .frame(width: s * 0.09, height: s * 0.09)
-            Circle()
-                .fill(Color.white.opacity(0.55))
-                .frame(width: s * 0.025, height: s * 0.025)
-                .offset(x: -s * 0.0075, y: -s * 0.0075)
-        }
-        .position(x: s * cx, y: s * cy)
-    }
-}
-
-/// The downward-curve "smile" from the brand mark (200×200 coordinate space).
-private struct SmileShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let w = rect.width, h = rect.height
-        var p = Path()
-        p.move(to: CGPoint(x: 0.26 * w, y: 0.56 * h))
-        p.addQuadCurve(to: CGPoint(x: 0.74 * w, y: 0.56 * h),
-                       control: CGPoint(x: 0.5 * w, y: 0.78 * h))
-        return p
     }
 }

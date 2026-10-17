@@ -1,6 +1,6 @@
 import Cocoa
 
-// CLI playback mode: ./TinyRecorder --play /path/to/macro.tinyrec
+// CLI playback mode: ./TinyTask --play /path/to/macro.tinyrec
 // Used by exported .command scripts. Exempt from the single-instance guard —
 // it never touches the library.
 let args = CommandLine.arguments
@@ -35,12 +35,12 @@ if args.count >= 3, args[1] == "--play" {
         semaphore.wait()
         exit(0)
     } catch {
-        FileHandle.standardError.write(Data("TinyRecorder: failed to play \(path): \(error)\n".utf8))
+        FileHandle.standardError.write(Data("TinyTask: failed to play \(path): \(error)\n".utf8))
         exit(1)
     }
 }
 
-// CLI conversion mode: ./TinyRecorder --convert in.rec out.tinyrec
+// CLI conversion mode: ./TinyTask --convert in.rec out.tinyrec
 // Converts TinyTask .rec or text .txt/.trm to .tinyrec (JSON) or .txt (TRM),
 // chosen by the OUTPUT extension. No GUI, exempt from the single-instance guard.
 if args.count >= 4, args[1] == "--convert" {
@@ -89,13 +89,13 @@ if args.count >= 4, args[1] == "--convert" {
             try enc.encode(macro).write(to: outURL, options: .atomic)
         }
 
-        var msg = "TinyRecorder: converted \(normalizedEvents.count) events -> \(outURL.lastPathComponent)"
+        var msg = "TinyTask: converted \(normalizedEvents.count) events -> \(outURL.lastPathComponent)"
         if result.skipped > 0 { msg += " (\(result.skipped) skipped)" }
         if let w = result.warning { msg += "\n  warning: \(w)" }
         FileHandle.standardOutput.write(Data((msg + "\n").utf8))
         exit(0)
     } catch {
-        FileHandle.standardError.write(Data("TinyRecorder: conversion failed: \(error.localizedDescription)\n".utf8))
+        FileHandle.standardError.write(Data("TinyTask: conversion failed: \(error.localizedDescription)\n".utf8))
         exit(1)
     }
 }
@@ -108,13 +108,28 @@ let twin = NSWorkspace.shared.runningApplications.first { app in
     guard app.processIdentifier != myPID else { return false }
     // Our shipped bundle, or a bundle-less dev build running the *same* binary.
     // Matching only on the executable *name* would clobber any unrelated tool
-    // that happens to be called "TinyRecorder".
+    // that happens to be called "TinyTask".
     if app.bundleIdentifier == "com.tinyrecorder.app" { return true }
     return app.bundleIdentifier == nil
         && app.executableURL?.resolvingSymlinksInPath() == myExec
 }
 if let twin {
-    twin.activate()
+    if let runningBundle = twin.bundleURL,
+       runningBundle.resolvingSymlinksInPath() != Bundle.main.bundleURL.resolvingSymlinksInPath() {
+        let application = NSApplication.shared
+        application.setActivationPolicy(.accessory)
+        application.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Another copy of TinyTask is running"
+        alert.informativeText = "Quit the running copy before opening this build. Permissions belong to the app macOS is actually running.\n\nRunning copy:\n\(runningBundle.path)\n\nRequested copy:\n\(Bundle.main.bundleURL.path)"
+        alert.addButton(withTitle: "Show Running Copy")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSWorkspace.shared.activateFileViewerSelecting([runningBundle])
+        }
+    } else {
+        twin.activate()
+    }
     exit(0)
 }
 

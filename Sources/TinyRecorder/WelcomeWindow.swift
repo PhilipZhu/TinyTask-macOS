@@ -1,7 +1,6 @@
 import Cocoa
 import SwiftUI
 import ApplicationServices
-import IOKit.hid
 
 final class WelcomeWindowController: NSWindowController, NSWindowDelegate {
     private var onClose: (() -> Void)?
@@ -14,10 +13,11 @@ final class WelcomeWindowController: NSWindowController, NSWindowDelegate {
         self.onClose = onClose
         let host = NSHostingController(
             rootView: WelcomeView(controller: controller, onDone: onDone)
+                .environmentObject(controller.state)
                 .frame(width: 560, height: 520)
         )
         let win = NSWindow(contentViewController: host)
-        win.title = "Welcome to TinyRecorder"
+        win.title = "Welcome to TinyTask"
         win.setContentSize(NSSize(width: 560, height: 520))
         win.styleMask = [.titled, .closable, .fullSizeContentView]
         win.titlebarAppearsTransparent = true
@@ -45,11 +45,6 @@ final class WelcomeWindowController: NSWindowController, NSWindowDelegate {
     }
 }
 
-/// True when macOS Input Monitoring is granted (separate from Accessibility).
-func inputMonitoringGranted() -> Bool {
-    IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
-}
-
 private enum Step: Int, CaseIterable {
     case welcome
     case permissions
@@ -62,9 +57,7 @@ private struct WelcomeView: View {
     let onDone: () -> Void
 
     @State private var step: Step = .welcome
-    @State private var accessibility: Bool = AXIsProcessTrusted()
-    @State private var inputMonitoring: Bool = inputMonitoringGranted()
-    @State private var refreshTimer: Timer?
+    @EnvironmentObject private var state: AppState
 
     var body: some View {
         ZStack {
@@ -82,9 +75,12 @@ private struct WelcomeView: View {
                 Group {
                     switch step {
                     case .welcome:     WelcomeStep()
-                    case .permissions: PermissionsStep(accessibility: $accessibility,
-                                                       inputMonitoring: $inputMonitoring,
-                                                       controller: controller)
+                    case .permissions: PermissionsStep(accessibility: state.accessibilityGranted,
+                                                       recordingAccess: state.canRecord,
+                                                       onAccessibility: controller.openAccessibilityPrefs,
+                                                       onRecording: controller.openInputMonitoringPrefs,
+                                                       onRecheck: state.refreshPermissions,
+                                                       onHelp: controller.showPermissionHelp)
                     case .hotkeys:     HotkeysStep(controller: controller)
                     case .ready:       ReadyStep(controller: controller, onDone: onDone)
                     }
@@ -103,7 +99,7 @@ private struct WelcomeView: View {
                         Button("Back") { withAnimation(.spring(response: 0.4)) { step = Step(rawValue: step.rawValue - 1) ?? .welcome } }
                             .buttonStyle(.bordered)
                             .controlSize(.large)
-                            .interactiveLift3D(intensity: 0.66, cornerRadius: 9)
+                            .hoverShade(cornerRadius: 9)
                     }
                     Spacer()
                     if step == .ready {
@@ -116,17 +112,17 @@ private struct WelcomeView: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
                         .tint(.red)
-                        .interactiveLift3D(intensity: 0.78, cornerRadius: 9)
+                        .hoverShade(cornerRadius: 9)
                     } else {
                         // Never trap the user: permissions can be skipped and
                         // granted later from Settings.
-                        if step == .permissions && !(accessibility && inputMonitoring) {
+                        if step == .permissions && !(state.accessibilityGranted && state.canRecord) {
                             Button("Skip for Now") {
                                 withAnimation(.spring(response: 0.4)) { step = .hotkeys }
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.large)
-                            .interactiveLift3D(intensity: 0.66, cornerRadius: 9)
+                            .hoverShade(cornerRadius: 9)
                         }
                         Button {
                             withAnimation(.spring(response: 0.4)) {
@@ -139,38 +135,27 @@ private struct WelcomeView: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
                         .tint(.red)
-                        .disabled(step == .permissions && !(accessibility && inputMonitoring))
-                        .interactiveLift3D(intensity: 0.78, cornerRadius: 9)
+                        .disabled(step == .permissions && !(state.accessibilityGranted && state.canRecord))
+                        .hoverShade(cornerRadius: 9)
                     }
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 18)
             }
         }
-        .onAppear { startRefresh() }
-        .onDisappear { refreshTimer?.invalidate() }
+        .onAppear { state.refreshPermissions() }
     }
 
     private var nextLabel: String {
         switch step {
         case .welcome:     return "Next"
-        case .permissions: return (accessibility && inputMonitoring) ? "Continue" : "Waiting…"
+        case .permissions: return (state.accessibilityGranted && state.canRecord) ? "Continue" : "Waiting…"
         case .hotkeys:     return "Next"
         case .ready:       return "Get Started"
         }
     }
 
-    private func startRefresh() {
-        refreshTimer?.invalidate()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in
-            let ax = AXIsProcessTrusted()
-            let im = inputMonitoringGranted()
-            DispatchQueue.main.async {
-                accessibility = ax
-                inputMonitoring = im
-            }
-        }
-    }
+
 }
 
 // MARK: - Steps
@@ -185,7 +170,7 @@ private struct WelcomeStep: View {
                 .animation(.spring(response: 0.6, dampingFraction: 0.55).delay(0.1), value: bounce)
                 .onAppear { bounce = true }
 
-            Text("Welcome to TinyRecorder")
+            Text("Welcome to TinyTask")
                 .font(.system(size: 26, weight: .bold))
             Text("The little macro recorder for macOS that's quietly doing your repetitive work.")
                 .font(.system(size: 13))
@@ -218,10 +203,13 @@ private struct WelcomeStep: View {
     }
 }
 
-private struct PermissionsStep: View {
-    @Binding var accessibility: Bool
-    @Binding var inputMonitoring: Bool
-    let controller: MenuBarController
+struct PermissionsStep: View {
+    let accessibility: Bool
+    let recordingAccess: Bool
+    let onAccessibility: () -> Void
+    let onRecording: () -> Void
+    let onRecheck: () -> Void
+    let onHelp: () -> Void
 
     var body: some View {
         VStack(spacing: 18) {
@@ -229,9 +217,9 @@ private struct PermissionsStep: View {
                 .font(.system(size: 56, weight: .light))
                 .foregroundStyle(.tint)
 
-            Text("Two quick permissions")
+            Text("Allow recording and playback")
                 .font(.system(size: 22, weight: .bold))
-            Text("macOS requires explicit consent to capture and post input events. We never see what you type or click outside of recordings you initiate.")
+            Text("Accessibility allows recording and playback. Input Monitoring is an alternative for recording only. Recording happens only when you start it.")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -242,16 +230,22 @@ private struct PermissionsStep: View {
                     title: "Accessibility",
                     subtitle: "Required to play back your recordings.",
                     granted: accessibility,
-                    action: { controller.openAccessibilityPrefs() }
+                    action: onAccessibility
                 )
                 PermissionCard(
-                    title: "Input Monitoring",
-                    subtitle: "Required to record your inputs.",
-                    granted: inputMonitoring,
-                    action: { controller.openInputMonitoringPrefs() }
+                    title: "Recording access",
+                    subtitle: accessibility ? "Available through Accessibility; no second grant needed." : "Allow Input Monitoring to record without playback.",
+                    granted: recordingAccess,
+                    action: onRecording
                 )
             }
             .frame(maxWidth: 440)
+            HStack(spacing: 16) {
+                Button("Recheck Access", action: onRecheck)
+                Button("Already enabled? Help…", action: onHelp)
+            }
+            .font(.system(size: 11))
+            .buttonStyle(.borderless)
         }
     }
 }
@@ -267,7 +261,7 @@ private struct HotkeysStep: View {
 
             Text("Global hotkeys")
                 .font(.system(size: 22, weight: .bold))
-            Text("Trigger recording, stop, and play from any app — without bringing TinyRecorder to the front. You can change these in Preferences.")
+            Text("Trigger recording, stop, and play from any app — without bringing TinyTask to the front. You can change these in Preferences.")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -297,7 +291,7 @@ private struct ReadyStep: View {
     private var countdownSentence: String {
         let secs = controller.state.countdownSeconds
         if secs > 0 {
-            return "Click the menu-bar icon or this Dock icon to open the library. Press Record to capture your first macro — TinyRecorder will count down \(secs) second\(secs == 1 ? "" : "s") before it starts so you have time to switch to the right window."
+            return "Click the menu-bar icon or this Dock icon to open the library. Press Record to capture your first macro — TinyTask will count down \(secs) second\(secs == 1 ? "" : "s") before it starts so you have time to switch to the right window."
         }
         return "Click the menu-bar icon or this Dock icon to open the library. Press Record to capture your first macro — recording starts immediately."
     }
@@ -402,12 +396,13 @@ private struct PermissionCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 12.5, weight: .semibold))
                 Text(subtitle).font(.system(size: 11)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
             Button(granted ? "Granted" : "Open Settings", action: action)
                 .controlSize(.small)
                 .disabled(granted)
-                .interactiveLift3D(intensity: 0.58, cornerRadius: 7)
+                .hoverShade(cornerRadius: 7)
         }
         .padding(12)
         .background(

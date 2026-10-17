@@ -11,7 +11,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		AA0000000000000000000005 /* TinyRecorder.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TinyRecorder.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0000000000000000000005 /* TinyTask.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TinyTask.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AA0000000000000000000008 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -44,7 +44,7 @@
 		AA0000000000000000000003 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				AA0000000000000000000005 /* TinyRecorder.app */,
+				AA0000000000000000000005 /* TinyTask.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -68,8 +68,8 @@
 				AA0000000000000000000006 /* Sources/TinyRecorder */,
 			);
 			name = TinyRecorder;
-			productName = TinyRecorder;
-			productReference = AA0000000000000000000005 /* TinyRecorder.app */;
+			productName = TinyTask;
+			productReference = AA0000000000000000000005 /* TinyTask.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -238,7 +238,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.tinyrecorder.app;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = TinyTask;
 			};
 			name = Debug;
 		};
@@ -260,7 +260,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.tinyrecorder.app;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = TinyTask;
 			};
 			name = Release;
 		};

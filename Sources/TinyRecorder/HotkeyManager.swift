@@ -75,7 +75,7 @@ final class HotkeyManager {
     }
 }
 
-/// Common Carbon key codes used by TinyRecorder.
+/// Common Carbon key codes used by TinyTask.
 enum KeyCode {
     static let f1: UInt32 = 122
     static let f2: UInt32 = 120

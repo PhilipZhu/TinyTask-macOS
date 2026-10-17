@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>TinyRecorder</string>
+	<string>TinyTask</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -12,7 +12,7 @@
 				<string>tinyrec</string>
 			</array>
 			<key>CFBundleTypeName</key>
-			<string>TinyRecorder Macro</string>
+			<string>TinyTask Macro</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSHandlerRank</key>
@@ -40,7 +40,7 @@
 				<string>trm</string>
 			</array>
 			<key>CFBundleTypeName</key>
-			<string>TinyRecorder Text Macro</string>
+			<string>TinyTask Text Macro</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSHandlerRank</key>
@@ -52,7 +52,7 @@
 		</dict>
 	</array>
 	<key>CFBundleExecutable</key>
-	<string>TinyRecorder</string>
+	<string>TinyTask</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleIconName</key>
@@ -60,7 +60,7 @@
 	<key>CFBundleIdentifier</key>
 	<string>com.tinyrecorder.app</string>
 	<key>CFBundleName</key>
-	<string>TinyRecorder</string>
+	<string>TinyTask</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -74,11 +74,11 @@
 	<key>LSMultipleInstancesProhibited</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>TinyRecorder uses system events to record and replay your input.</string>
+	<string>TinyTask uses system events to record and replay your input.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>TinyRecorder — a free TinyTask clone for macOS.</string>
+	<string>TinyTask — record, replay and schedule macros on macOS.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>UTExportedTypeDeclarations</key>
@@ -89,7 +89,7 @@
 				<string>public.json</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>TinyRecorder Macro</string>
+			<string>TinyTask Macro</string>
 			<key>UTTypeIdentifier</key>
 			<string>com.tinyrecorder.macro</string>
 			<key>UTTypeTagSpecification</key>
@@ -106,7 +106,7 @@
 				<string>public.plain-text</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>TinyRecorder Text Macro</string>
+			<string>TinyTask Text Macro</string>
 			<key>UTTypeIdentifier</key>
 			<string>com.tinyrecorder.text-macro</string>
 			<key>UTTypeTagSpecification</key>
